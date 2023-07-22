@@ -252,7 +252,6 @@ def rook_moves(board):
     
     return candidate_boards
 
-
 def castle_moves(board):
     rook_locs = np.transpose(((board==3) | (board==4)).nonzero())
     king_loc = np.transpose(((board==9) | (board==10)).nonzero())[0] # Only ever one
@@ -618,6 +617,7 @@ def king_moves(board):
                 
     return candidate_boards
 
+
 def candidate_moves(board):
     '''Return candidate boards representing each potential move from a given board configuration.'''
     candidates = pawn_moves(board) + rook_moves(board) + knight_moves(board) + bishop_moves(board) + queen_moves(board) + king_moves(board) + castle_moves(board)
@@ -682,9 +682,10 @@ def check_gameover(board, n_candidates, n_moves, turn, max_moves=np.inf, points_
             return (0.0, 0.0)
     else: # Return False, game is not over. 
         return False
-    
+
+
 def compress(string):
-    ''' Generating short unique string tokens to represent board states.'''
+    ''' Generating short unique string tokens to represent board states. Desireable to be reversible, so not just hash funciton.'''
     return re.sub(r'(?<![0-9])[1](?![0-9])', '', ''.join('%s%s' % (char, sum(1 for _ in group)) for char, group in groupby(string)))
 
 def board_token(board, prefix):
@@ -719,9 +720,7 @@ def token_board(token, splitter='_'):
     return np.array(board).reshape(8,8)
 
 def play_historic(board, moves, turn):
-    '''
-    Wrote this function to play historic games based on the sequence of moves to verify that all moves made are legal in the above framework.
-    '''
+    '''Wrote this function to play historic games based on the sequence of moves in Portable Game Notation (PGN) to verify that all moves made are legal in the above framework.'''
     
     # Output of function
     states = []

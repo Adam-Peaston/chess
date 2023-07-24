@@ -15,4 +15,4 @@ Some variations on their work that I am interested to explore in this project:
 While the Attention mechanism is a relatively minor incidental aspect of the overall project, if successful I would title the final paper on this work "Evaluation Is All You Need".
 
 ## Lessons learnt
-1. 
+1. Achieving checkmates is important for generating training data. This seems obvious in retrospect, but position evaluations provide greater learning signal when annotated with either a win or a loss outcome - draw outcomes have the opposite effect. This explains the wisdom of constructing agents that can be parameterised with greater and lesser relative strength to increase the likelihood of a game ending in checkmate.

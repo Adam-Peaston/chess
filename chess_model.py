@@ -247,11 +247,14 @@ def get_tnmt_result(data_path):
         tnmt_results.append(tnmt_result)
     return tnmt_results
 
-def compile_tournament_data(tournaments):
-    # tournaments = [{game_pair: [result_0w1b, resul_1w0b], ...}, {game_pair: [result_0w1b, resul_1w0b], ...}]
-    # result = {'white': {'moves': [(end_token, end_board), (end_token, end_board), ...], 'points': float}, 'black': {...}}
+def compile_tournament_data(data_path):
+    tmnt_files = [f for f in os.listdir(data_path) if f.startswith('tmnt_') and f.endswith('.pkl')]
     summary = dict()
-    for tournament in tournaments: # tournament = {game_pair: [result_0w1b, resul_1w0b], game_pair: [result_0w1b, resul_1w0b], ...}
+
+    for file in tmnt_files:
+        with open(os.path.join(data_path, file), 'rb') as pkl:
+            tournament = pickle.load(pkl)
+
         all_results = chain.from_iterable(tournament.values())
         for result in all_results:
             for color in result:
@@ -264,10 +267,12 @@ def compile_tournament_data(tournaments):
                         summary[token] = {'board': board, 'visits': 1, 'points': points}
     return summary
 
+
+
 class ChessDataset(Dataset):
     def __init__(self, data_path, device):
-        tnmt_results = get_tnmt_result(data_path)
-        self.data = compile_tournament_data(tnmt_results)
+        self.data = compile_tournament_data(data_path)
+        # self.data.augment_with_checkmates
         # data: {token: {'board': board, 'visits': visits, 'points': points}, token: {...}, ...}
         self.catalogue = list(self.data.keys())
         self.device = device

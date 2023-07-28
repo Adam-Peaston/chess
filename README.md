@@ -11,7 +11,7 @@ I am basing this project on the work of Silver et. al. at DeepMind who demonstra
 Some variations on their work that I am interested to explore in this project:
 1. The AlphaZero algorithm, while not specific to any particular model architecture, was demonstrated using a CNN architecture. I am keen to see how well a Transformer architecture will take to this task.
 2. The AlphaZero RL approach involved generating two outputs from a given board state;
- - a vector of move probabilities $\ p = P(a|s)$, and
+ - a vector of move probabilities $\ p = P(a|s)$, for making move $\ a$ from starting state $\ s$ and
  - a scalar $\ v$ representing the likelihood of winning ($\ outcome = z$) from this board state $\ v = E[z|s]$.
 
 I have a couple of challenges for this:

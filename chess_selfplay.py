@@ -226,8 +226,9 @@ class Agent:
             return choices(tokens)[0]
         else:
             # Otherwise target entropy is either proportion p * max_possible_entropy (for small option sets) or as-if k-degree of freedom distribution (for scores >> k)
-            target_entropy = p * np.log2(len(scores)) # ?? Allow the model more freedom when there are more options to chose from?
-            # target_entropy = min(p * np.log2(len(scores)), np.log2(k))
+            target_entropy = min(p * np.log2(len(scores)), np.log2(k))
+            # If we abandon the second term above, we allow the model more freedom when there are more options to chose from.
+            # Actually we could achieve the same thing by setting k ~ inf. Numpy handles this just fine so np.log2(float('inf')) = inf
             t = entropy_temperature(scores, target_entropy)
             dist = softmax_temp(scores, temp=t)
             return choices(tokens, cum_weights=list(accumulate(dist)))[0]

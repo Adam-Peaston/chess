@@ -1,7 +1,7 @@
 # chess
 My goal here is to create an AI that learns to play chess from scratch, or "tabula rasa". This project inculdes development of necessary chess primitives like boards, pieces, allowed moves, games, etc. as well as the core AI which will be a Transformer model, and necessary data generating and training loops.
 
-Let's see how we go! All suggestions and collaboration proposals are welcome!
+Let's see how we go! All suggestions and collaboration proposals are welcome, particuarly if you can help or make recommendations for a GUI to visualise and allow a user to play a game against the AI, or if you can help me improve my Markdown formatting.
 
 ## Background
 I have always found the concept of machine intelligence fascinating. Furthermore, when machines are able to craft an action policy based on nothing but their own experiences, that seems to be to be something more than simply holding up a mirror to humanity's domain experts or humanity as a whole.

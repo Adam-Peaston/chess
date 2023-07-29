@@ -287,7 +287,7 @@ def main(
 
 if __name__ == "__main__":
     '''
-    Notebook script should be able to access namespace including the following:
+    Notebook script should be able to access self_play_args dictionary object specifying the following:
     num_workers          # Required: number of python processes to spawn.
     num_tournaments      # Required: number of tournaments to play - one worker per tournament
     agents_spec          # Required: specification for each agent including model and selector params
@@ -297,17 +297,16 @@ if __name__ == "__main__":
     save                 # Required: boolean - whether to save the self-play results or not
     result_dest          # Optional based on "save": destination directory for tournament results to be saved
     '''
-    
-    # Assume that the following variables are defined in the namespace of the controlling notebook:
-    kwargs = {
-        'agents_spec': agents_spec, 'num_games': num_games, 'starting_state': starting_state, 'max_moves': max_moves, 'save': save, 'result_dest': result_dest
+    kwagrs = {
+        'agents_spec': self_play_args['agents_spec'], 'num_games': self_play_args['num_games'], 'starting_state': self_play_args['starting_state'], 
+        'max_moves': self_play_args['max_moves'], 'save': self_play_args['save'], 'result_dest': self_play_args['result_dest']
     }
 
-    # agents_spec=None, num_games=None, starting_state=None, max_moves=float('inf'), save=False, result_dest=None
-    
     # Bind user input variables to the main function
     main_ = partial(main, **kwargs)
 
     # Call the script that will play num_games in parallel
-    with Pool(num_workers) as pool:
-        _ = pool.map(main_, range(num_tournaments))
+    nworkers = self_play_args['num_workers']
+    ntournaments = self_play_args['num_tournaments']
+    with Pool(nworkers) as pool:
+        _ = pool.map(main_, range(ntournaments))

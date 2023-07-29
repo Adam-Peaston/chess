@@ -270,7 +270,9 @@ def compile_tournament_data(data_path):
 
 
 class ChessDataset(Dataset):
-    def __init__(self, data_path, device):
+    def __init__(self, self_play_dirs, checmates_dir, device):
+        ### NEEDS WORK HERE
+
         self.data = compile_tournament_data(data_path)
         # self.data.augment_with_checkmates
         # data: {token: {'board': board, 'visits': visits, 'points': points}, token: {...}, ...}

@@ -317,7 +317,7 @@ if __name__ == "__main__":
     save                 # Required: boolean - whether to save the self-play results or not
     result_dest          # Optional based on "save": destination directory for tournament results to be saved
     '''
-    kwagrs = {
+    kwargs = {
         'agents_spec': self_play_args['agents_spec'], 'num_games': self_play_args['num_games'], 'starting_state': self_play_args['starting_state'], 
         'max_moves': self_play_args['max_moves'], 'save': self_play_args['save'], 'result_dest': self_play_args['result_dest']
     }

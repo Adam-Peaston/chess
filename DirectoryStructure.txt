@@ -1,0 +1,12 @@
+data -> output -> ...
+
+--round_0
+   |--checkmates.pkl
+   |--model.pt
+   |--self_play
+   |   |--tnmt_XXXX.pkl
+   |   |--tnmt_YYYY.pkl
+   |   ...
+--round_1
+   | ...
+

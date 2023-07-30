@@ -324,7 +324,7 @@ def train(model, loss_fn, optimizer, train_dataloader, test_dataloader, warmup_p
         loss_sum = 0
         examples_seen = 0
 
-        for data in tqdm(train_dataloader):
+        for data in train_dataloader:
             optimizer.zero_grad()
             X, y = data
             z = model(X)
@@ -342,7 +342,7 @@ def train(model, loss_fn, optimizer, train_dataloader, test_dataloader, warmup_p
         with torch.no_grad():
             loss_sum = 0
             examples_seen = 0
-            for data in tqdm(test_dataloader):
+            for data in test_dataloader:
                 X, y = data
                 z = model(X)
                 loss = loss_fn((z, y))

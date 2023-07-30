@@ -236,46 +236,50 @@ class PiecesModel(nn.Module):
         scores, _ = zip(*[points_balance(b) for b in x])
         return np.stack(scores)
 
-## A couple of helper functions for the ChessDataset class
+## Helper function for the ChessDataset class
 
-def get_tnmt_result(data_path):
-    tmnt_files = [f for f in os.listdir(data_path) if f.startswith('tmnt_') and f.endswith('.pkl')]
-    tnmt_results = []
-    for file in tmnt_files:
-        with open(os.path.join(data_path, file), 'rb') as pkl:
-            tnmt_result = pickle.load(pkl)
-        tnmt_results.append(tnmt_result)
-    return tnmt_results
+def compile_dataset(root_dir, look_back=10):
+    # Catalogue training rounds to source dataset from
+    training_round_dirs = sorted([d for d in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir,d))])
+    lookback_rounds = training_round_dirs[-look_back:]
 
-def compile_tournament_data(data_path):
-    tmnt_files = [f for f in os.listdir(data_path) if f.startswith('tmnt_') and f.endswith('.pkl')]
-    summary = dict()
-
-    for file in tmnt_files:
-        with open(os.path.join(data_path, file), 'rb') as pkl:
-            tournament = pickle.load(pkl)
-
-        all_results = chain.from_iterable(tournament.values())
-        for result in all_results:
-            for color in result:
-                points = result[color]['points']
-                for token, board in result[color]['moves']:
-                    if token in summary:
-                        summary[token]['visits'] += 1
-                        summary[token]['points'] += points
-                    else:
-                        summary[token] = {'board': board, 'visits': 1, 'points': points}
-    return summary
-
-
+    # compile positions
+    # data[token] = {'board': board, 'visits': 1, 'points': points}
+    data = {}
+    for training_round_dir in lookback_rounds:
+        self_play_path = os.path.join(root_dir, training_round_dir, 'self_play')
+        tournamentfiles = [f for f in os.listdir(self_play_path) if f.startswith('tmnt_') and f.endswith('.pkl')]
+        for file in tournamentfiles:
+            with open(os.path.join(self_play_path, file), 'rb') as pkl:
+                tourn = pickle.load(pkl)
+            for i, pair in tourn.items():
+                for order,game in pair.items():
+                    for color in game:
+                        points = game[color]['points']
+                        for token,board in game[color]['moves']:
+                            if token in data:
+                                data[token]['visits'] += 1
+                                data[token]['points'] += points
+                            else:
+                                data[token] = {'board': board, 'visits':1, 'points':points}
+        
+        # augment with checkmates from all previous training rounds
+        for training_round_dir in training_round_dirs:
+            checkmates_file = os.path.join(root_dir, training_round_dir, 'checkmates.pkl')
+            with open(checkmates_file, 'rb') as pkl:
+                checkmates = pickle.load(pkl)
+            for token,board,points in checkmates:
+                if token in data:
+                    data[token]['visits'] += 1
+                    data[token]['points'] += points
+                else:
+                    data[token] = {'board':board, 'visits':1, 'points':points}
+    return data
 
 class ChessDataset(Dataset):
-    def __init__(self, self_play_dirs, checmates_dir, device):
-        ### NEEDS WORK HERE
-
-        self.data = compile_tournament_data(data_path)
-        # self.data.augment_with_checkmates
-        # data: {token: {'board': board, 'visits': visits, 'points': points}, token: {...}, ...}
+    def __init__(self, root_dir, look_back, device):
+        # Compile dataset from passed self_play directories
+        self.data = compile_dataset(root_dir, look_back)
         self.catalogue = list(self.data.keys())
         self.device = device
 

@@ -248,6 +248,26 @@ def summarise_sim_tournament(tournament_results):
                     sim_summary[token] = {'visits':1, 'points':points}
     return sim_summary
 
+def harvest_checkmates(training_round_dir):
+    checkmates = []
+    self_play_dir = os.path.join(training_round_dir, 'self_play')
+    tournamentfiles = [f for f in os.listdir(self_play_dir) if f.startswith('tmnt_') and f.endswith('.pkl')]
+    for file in tournamentfiles:
+        with open(os.path.join(self_play_dir, file), 'rb') as pkl:
+            tourn = pickle.load(pkl)
+        for i, pair in tourn.items():
+            for order,game in pair.items():
+                for color in game:
+                    if game[color]['points'] == 1: # This game was won by this color
+                        winning_token, winning_board = game[color]['moves'][-1] # The last move made by the winning color - checkmate
+                        checkmates.append((winning_token, winning_board, 1)) # Winning board
+                        # construct losing board as well
+                        losing_color = 'black' if color == 'white' else 'white'
+                        losing_board = conjugate_board(winning_board)
+                        losing_token = board_token(losing_board, f'{losing_color}E_')
+                        checkmates.append((losing_token, losing_board, -1))
+    with open(os.path.join(training_round_dir, f'checkmates.pkl'), 'wb') as pkl:
+            pickle.dump(checkmates, pkl)
 
 def main(
         tournament_id, agents_spec=None, num_games=None, starting_state=None, max_moves=float('inf'), save=False, result_dest=None

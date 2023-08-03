@@ -197,11 +197,14 @@ class TransformerModel(nn.Module):
         # Generate tokens which will accumulate the board scoring information, one per board.
         scoring_tokens = torch.ones((len(x),1), dtype=torch.int, device=self.device) * 21 # Assign scoring token to number 21 
         # Appending scoring tokens to the input tensor.
-        x = torch.cat((x, scoring_tokens), dim=1)
+        x = torch.cat((x, scoring_tokens), dim=1) # (B, S)
         # Convert integer representations to embedding vectors.
         z = self.embedder(x) # (B, S) => (B, S, E)
         # Add positional encodings to all but the scoring token vectors
-        z[:,:-1,:] += self.pe # (B, S, E) + (1, S, E)
+        z[:,:-1,:] += self.pe # (B, S, E) + (1, S, E) => (B, S, E)
+        # Add zero vector to each board for "ghostmax" ? (B, 1, E), essentially an additional square with zero embedding vector.
+        ghost = torch.zeros((z.shape[0], 1, z.shape[2]), device=self.device)
+        z = torch.cat((z, ghost), axis=1)
         # Forward through model.
         z = self.transformer_encoder(z)
         # extract off the scoring token vector.

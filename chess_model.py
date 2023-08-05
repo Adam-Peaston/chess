@@ -313,17 +313,73 @@ class TanhLoss(nn.Module):
             return self.criterion((z+1)/2, (y+1)/2).sum()
 
 
-def train(model, loss_fn, optimizer, train_dataloader, test_dataloader, warmup_passes, max_lr, save_dir, stopping):
+# def train(model, loss_fn, optimizer, train_dataloader, test_dataloader, warmup_passes, max_lr, save_dir, stopping):
+
+#     warm_steps = len(train_dataloader) * warmup_passes
+#     train_step = 0
+#     best_test_loss = float('inf')
+#     stopping_count = 0
+#     epoch = 0
+
+#     while stopping_count < stopping:
+        
+#         epoch += 1
+#         loss_sum = 0
+#         examples_seen = 0
+
+#         for data in train_dataloader:
+#             optimizer.zero_grad()
+#             X, y = data
+#             z = model(X)
+#             loss = loss_fn((z, y))
+#             loss_sum += loss.item()
+#             examples_seen += X.shape[0]
+#             loss.backward()
+#             optimizer.step()
+#             # learning rate warm-up
+#             train_step += 1
+#             for g in optimizer.param_groups:
+#                 g['lr'] = min(max_lr, max_lr * train_step / warm_steps)
+#         mean_train_loss = loss_sum / examples_seen
+
+#         with torch.no_grad():
+#             loss_sum = 0
+#             examples_seen = 0
+#             for data in test_dataloader:
+#                 X, y = data
+#                 z = model(X)
+#                 loss = loss_fn((z, y))
+#                 loss_sum += loss.item()
+#                 examples_seen += X.shape[0]
+#             mean_test_loss = loss_sum / examples_seen
+
+#             if mean_test_loss < best_test_loss:
+#                 torch.save(model.state_dict(), save_dir)
+#                 best_test_loss = mean_test_loss
+#                 stopping_count = 0
+#             else:
+#                 stopping_count += 1
+
+#         print(f'Epoch: {epoch}, train loss: {mean_train_loss:,.5f}, test loss: {mean_test_loss:,.5f}, stopping count: {stopping_count}')
+#     return model
+
+
+def train(model, loss_fn, optimizer, train_dataloader, test_dataloader, warmup_passes, max_lr, save_dir, slope_threshold=0, stop_after=10):
+
+    # A little more room to keep training until we're sure there's no more improvement to be found. Fit a line to the latter half of recorded test losses.
+    # If the slope of that line is greater than some threshold (0 indicates no average improvement), then increment the stopping counter, ultimately halting. 
 
     warm_steps = len(train_dataloader) * warmup_passes
     train_step = 0
     best_test_loss = float('inf')
+    test_losses = []
     stopping_count = 0
-    data_pass = 0
+    epoch = 0
+    slope = 'None'
 
-    while stopping_count < stopping:
+    while stopping_count < stop_after:
         
-        data_pass += 1
+        epoch += 1
         loss_sum = 0
         examples_seen = 0
 
@@ -352,13 +408,22 @@ def train(model, loss_fn, optimizer, train_dataloader, test_dataloader, warmup_p
                 loss_sum += loss.item()
                 examples_seen += X.shape[0]
             mean_test_loss = loss_sum / examples_seen
+            test_losses.append(mean_test_loss)
 
             if mean_test_loss < best_test_loss:
                 torch.save(model.state_dict(), save_dir)
                 best_test_loss = mean_test_loss
-                stopping_count = 0
-            else:
-                stopping_count += 1
 
-        print(f'Pass: {data_pass}, train loss: {mean_train_loss:,.5f}, test loss: {mean_test_loss:,.5f}, stopping count: {stopping_count}')
+            if epoch >= 4: # only a valid measure after 4 epochs
+                # Fit a regression line to the second half of the recorded test_losses
+                X = np.linspace(0, 1, len(test_losses)//2)
+                y = np.array(test_losses[-len(X):])
+                y = (y - y.min()) / (y.max() - y.min()) # Squish to range [0, 1]
+                slope = ((X-X.mean())*(y-y.mean())).sum()/((X-X.mean())**2) # Slope of best fit line
+                if slope > slope_threshold:
+                    stopping_count += 1
+                else:
+                    stopping_count = 0
+
+        print(f'Epoch: {epoch}, train loss: {mean_train_loss:,.5f}, test loss: {mean_test_loss:,.5f}, slope: {slope}, stopping count: {stopping_count}')
     return model

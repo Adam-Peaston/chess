@@ -375,7 +375,7 @@ def train(model, loss_fn, optimizer, train_dataloader, test_dataloader, warmup_p
     test_losses = []
     stopping_count = 0
     epoch = 0
-    slope = 'None'
+    slope = 0
 
     while stopping_count < stop_after:
         
@@ -419,11 +419,11 @@ def train(model, loss_fn, optimizer, train_dataloader, test_dataloader, warmup_p
                 X = np.linspace(0, 1, len(test_losses)//2)
                 y = np.array(test_losses[-len(X):])
                 y = (y - y.min()) / (y.max() - y.min()) # Squish to range [0, 1]
-                slope = ((X-X.mean())*(y-y.mean())).sum()/((X-X.mean())**2) # Slope of best fit line
+                slope = ((X-X.mean())*(y-y.mean())).sum()/(((X-X.mean())**2).sum()) # Slope of best fit line
                 if slope > slope_threshold:
                     stopping_count += 1
                 else:
                     stopping_count = 0
 
-        print(f'Epoch: {epoch}, train loss: {mean_train_loss:,.5f}, test loss: {mean_test_loss:,.5f}, slope: {slope}, stopping count: {stopping_count}')
+        print(f'Epoch: {epoch}, train loss: {mean_train_loss:,.5f}, test loss: {mean_test_loss:,.5f}, slope: {slope:,.3f}, stopping count: {stopping_count}')
     return model

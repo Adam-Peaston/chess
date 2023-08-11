@@ -246,12 +246,10 @@ def compile_dataset(root_dir, look_back=10, tts=0.8):
     root_dir_subs = sorted([d for d in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir,d))], key=lambda d: int(d.split('_')[-1]))
     # All data to be used in training this round
     all_dirs = root_dir_subs[-look_back:]
-    # Number of test dirs, at least 1
-    num_test_dirs = max(int(tts * len(all_dirs)), 1)
     # Training (split from test) directories, the earlier directories
-    train_dirs = all_dirs[:num_test_dirs]
+    train_dirs = all_dirs[:-1]
     # Test (split from training) directories, the later directories
-    test_dirs = all_dirs[num_test_dirs:]
+    test_dirs = all_dirs[-1:]
 
     # compile training positions
     # data[token] = {'board': board, 'visits': 1, 'points': points}
@@ -273,8 +271,8 @@ def compile_dataset(root_dir, look_back=10, tts=0.8):
                             else:
                                 train_data[token] = {'board': board, 'visits':1, 'points':points}
         
-        # augment with checkmates from all previous training rounds.
-        for train_dir in root_dir_subs[:num_test_dirs]:
+        # augment with checkmates from all previous training rounds, except test round
+        for train_dir in root_dir_subs[:-1]:
             checkmates_file = os.path.join(root_dir, train_dir, 'checkmates.pkl')
             with open(checkmates_file, 'rb') as pkl:
                 checkmates = pickle.load(pkl)
@@ -416,6 +414,7 @@ def train(model, loss_fn, optimizer, train_dataloader, test_dataloader, warmup_p
     stopping_count = 0
     epoch = 0
     slope = 0
+    train_report = []
 
     while stopping_count < stop_after:
         
@@ -451,7 +450,7 @@ def train(model, loss_fn, optimizer, train_dataloader, test_dataloader, warmup_p
             test_losses.append(mean_test_loss)
 
             if mean_test_loss < best_test_loss:
-                torch.save(model.state_dict(), save_dir)
+                torch.save(model.state_dict(), os.path.join(save_dir, 'model.pt'))
                 best_test_loss = mean_test_loss
 
             if epoch >= 4: # only a valid measure after 4 epochs
@@ -466,4 +465,8 @@ def train(model, loss_fn, optimizer, train_dataloader, test_dataloader, warmup_p
                     stopping_count = 0
 
         print(f'Epoch: {epoch}, train loss: {mean_train_loss:,.5f}, test loss: {mean_test_loss:,.5f}, slope: {slope:,.3f}, stopping count: {stopping_count}')
+        train_report.append([epoch, mean_train_loss, mean_test_loss, slope, stopping_count])
+        with open(os.path.join(save_dir, 'report.pkl'), 'wb') as pkl:
+            pickle.dump(train_report, pkl)
+
     return model

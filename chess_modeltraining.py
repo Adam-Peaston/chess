@@ -1,35 +1,40 @@
 # packages
 import os, torch
-from chess_model import TransformerModel, ChessDataset, TanhLoss, train
+from chess_model import TransformerModel, ChessDataset, TanhLoss, compile_dataset, train
 from torch.utils.data import random_split, DataLoader
 from functools import partial
 from multiprocessing import Pool
 
-def main(pid, root_dir, current_training_round_dir, model_kwargs, device):
-    latest_model_path = os.path.join(root_dir, current_training_round_dir, 'model.pt')
-    if not (os.path.exists(latest_model_path) and os.path.isfile(latest_model_path)):
+def main(pid, mode, root_dir, previous_training_round_dir, current_training_round_dir, model_kwargs, device):
 
-        # No model saved here yet. Create and train a new model based on the previous k rounds of self-play data.
-        # We currently have 591 tournaments saved in baseline and 191 in round1. We could use k = 10 and go from there?
+    previous_model_path = os.path.join(root_dir, previous_training_round_dir, 'model.pt')
+    if mode == 'continuous' and os.path.exists(previous_model_path) and os.path.isfile(previous_model_path):
+        print('Training from model saved last round.')
+        model_kwargs['load_path'] = previous_model_path # Load previous generation model
+    else:
+        print('Training brand new model.')
         model_kwargs['load_path'] = None # Brand new model
-        model = TransformerModel(**model_kwargs)
-        optimizer = torch.optim.Adam(model.parameters(), lr=0, weight_decay=0)
-        loss_fn = TanhLoss()
-        dataset = ChessDataset(root_dir=root_dir, look_back=10, device=device)
-        train_set, test_set = random_split(dataset, [int(len(dataset)*0.8), len(dataset) - int(len(dataset)*0.8)])
-        train_loader = DataLoader(train_set, batch_size=1000, shuffle=True, num_workers=0)
-        test_loader = DataLoader(test_set, batch_size=1000, shuffle=True, num_workers=0)
-        print(f'Training on {len(train_set):,.0f} examples in {len(train_loader):,.0f} batches.')
+    
+    model = TransformerModel(**model_kwargs)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0, weight_decay=0)
+    loss_fn = TanhLoss()
 
-        # Train on the data
-        model_dest = os.path.join(root_dir, current_training_round_dir, 'model.pt')
-        model = train(model, loss_fn, optimizer, train_loader, test_loader, warmup_passes=4, max_lr=1e-4, save_dir=model_dest, stopping=10)
-        
-        # Cut ties with now orphan variables
-        del model, optimizer, loss_fn, dataset, train_set, test_set, train_loader, test_loader
+    train_data, test_data = compile_dataset(root_dir, look_back=10, tts=0.8)
+    train_set = ChessDataset(train_data, device=device)
+    test_set = ChessDataset(test_data, device=device)
 
+    train_loader = DataLoader(train_set, batch_size=1000, shuffle=True, num_workers=0)
+    test_loader = DataLoader(test_set, batch_size=1000, shuffle=True, num_workers=0)
+    print(f'Training on {len(train_set):,.0f} examples in {len(train_loader):,.0f} batches.')
+
+    # Train on the data
+    model_dest = os.path.join(root_dir, current_training_round_dir)
+    model = train(model, loss_fn, optimizer, train_loader, test_loader, warmup_passes=4, max_lr=2e-4, save_dir=model_dest, slope_threshold=0, stop_after=20)
+    
     # Clean up CUDA memory
+    del model, optimizer, loss_fn, train_set, test_set, train_loader, test_loader
     torch.cuda.empty_cache()
+
 
 if __name__ == "__main__":
     '''

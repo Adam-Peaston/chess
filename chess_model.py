@@ -241,16 +241,23 @@ class PiecesModel(nn.Module):
 
 ## Helper function for the ChessDataset class
 
-def compile_dataset(root_dir, look_back=10):
+def compile_dataset(root_dir, look_back=10, tts=0.8):
     # Catalogue training rounds to source dataset from
-    training_round_dirs = sorted([d for d in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir,d))])
-    lookback_rounds = training_round_dirs[-look_back:]
+    root_dir_subs = sorted([d for d in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir,d))], key=lambda d: int(d.split('_')[-1]))
+    # All data to be used in training this round
+    all_dirs = root_dir_subs[-look_back:]
+    # Number of test dirs, at least 1
+    num_test_dirs = max(int(tts * len(all_dirs)), 1)
+    # Training (split from test) directories, the earlier directories
+    train_dirs = all_dirs[:num_test_dirs]
+    # Test (split from training) directories, the later directories
+    test_dirs = all_dirs[num_test_dirs:]
 
-    # compile positions
+    # compile training positions
     # data[token] = {'board': board, 'visits': 1, 'points': points}
-    data = {}
-    for training_round_dir in lookback_rounds:
-        self_play_path = os.path.join(root_dir, training_round_dir, 'self_play')
+    train_data = {}
+    for train_dir in train_dirs:
+        self_play_path = os.path.join(root_dir, train_dir, 'self_play')
         tournamentfiles = [f for f in os.listdir(self_play_path) if f.startswith('tmnt_') and f.endswith('.pkl')]
         for file in tournamentfiles:
             with open(os.path.join(self_play_path, file), 'rb') as pkl:
@@ -260,29 +267,62 @@ def compile_dataset(root_dir, look_back=10):
                     for color in game:
                         points = game[color]['points']
                         for token,board in game[color]['moves']:
-                            if token in data:
-                                data[token]['visits'] += 1
-                                data[token]['points'] += points
+                            if token in train_data:
+                                train_data[token]['visits'] += 1
+                                train_data[token]['points'] += points
                             else:
-                                data[token] = {'board': board, 'visits':1, 'points':points}
+                                train_data[token] = {'board': board, 'visits':1, 'points':points}
         
-        # augment with checkmates from all previous training rounds
-        for training_round_dir in training_round_dirs:
-            checkmates_file = os.path.join(root_dir, training_round_dir, 'checkmates.pkl')
+        # augment with checkmates from all previous training rounds.
+        for train_dir in root_dir_subs[:num_test_dirs]:
+            checkmates_file = os.path.join(root_dir, train_dir, 'checkmates.pkl')
             with open(checkmates_file, 'rb') as pkl:
                 checkmates = pickle.load(pkl)
             for token,board,points in checkmates:
-                if token in data:
-                    data[token]['visits'] += 1
-                    data[token]['points'] += points
+                if token in train_data:
+                    train_data[token]['visits'] += 1
+                    train_data[token]['points'] += points
                 else:
-                    data[token] = {'board':board, 'visits':1, 'points':points}
-    return data
+                    train_data[token] = {'board':board, 'visits':1, 'points':points}
+
+    # compile test positions
+    # data[token] = {'board': board, 'visits': 1, 'points': points}
+    test_data = {}
+    for test_dir in test_dirs:
+        self_play_path = os.path.join(root_dir, test_dir, 'self_play')
+        tournamentfiles = [f for f in os.listdir(self_play_path) if f.startswith('tmnt_') and f.endswith('.pkl')]
+        for file in tournamentfiles:
+            with open(os.path.join(self_play_path, file), 'rb') as pkl:
+                tourn = pickle.load(pkl)
+            for i, pair in tourn.items():
+                for order,game in pair.items():
+                    for color in game:
+                        points = game[color]['points']
+                        for token,board in game[color]['moves']:
+                            if token in test_data:
+                                test_data[token]['visits'] += 1
+                                test_data[token]['points'] += points
+                            else:
+                                test_data[token] = {'board': board, 'visits':1, 'points':points}
+        
+        # augment with checkmates from all previous training rounds.
+        for test_dir in test_dirs:
+            checkmates_file = os.path.join(root_dir, test_dir, 'checkmates.pkl')
+            with open(checkmates_file, 'rb') as pkl:
+                checkmates = pickle.load(pkl)
+            for token,board,points in checkmates:
+                if token in test_data:
+                    test_data[token]['visits'] += 1
+                    test_data[token]['points'] += points
+                else:
+                    test_data[token] = {'board':board, 'visits':1, 'points':points}
+    
+    return train_data, test_data
 
 class ChessDataset(Dataset):
-    def __init__(self, root_dir, look_back, device):
+    def __init__(self, data, device):
         # Compile dataset from passed self_play directories
-        self.data = compile_dataset(root_dir, look_back)
+        self.data = data
         self.catalogue = list(self.data.keys())
         self.device = device
 

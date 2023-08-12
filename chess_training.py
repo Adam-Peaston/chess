@@ -6,82 +6,47 @@ from torch.utils.data import DataLoader
 from functools import partial
 from multiprocessing import Pool
 
-def compile_dataset(root_dir, look_back=10):
+def _compile_dataset_(root_dir, split_dir):
+    # Compile training positions
+    data = {}
+    self_play_path = os.path.join(root_dir, split_dir, 'self_play')
+    tournamentfiles = [f for f in os.listdir(self_play_path) if f.startswith('tmnt_') and f.endswith('.pkl')]
+    for file in tournamentfiles:
+        with open(os.path.join(self_play_path, file), 'rb') as pkl:
+            tourn = pickle.load(pkl)
+        for i, pair in tourn.items():
+            for order,game in pair.items():
+                for color in game:
+                    points = game[color]['points']
+                    for token,board in game[color]['moves']:
+                        if token in data:
+                            data[token]['visits'] += 1
+                            data[token]['points'] += points
+                        else:
+                            data[token] = {'board': board, 'visits':1, 'points':points}
+
+def compile_datasets(root_dir):
     # Catalogue training rounds to source dataset from
     root_dir_subs = sorted([d for d in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir,d))], key=lambda d: int(d.split('_')[-1]))
-    # All data to be used in training this round
-    all_dirs = root_dir_subs[-look_back:]
-    # Training (split from test) directories, the earlier directories
-    train_dirs = all_dirs[:-1]
-    # Test (split from training) directories, the later directories
-    test_dirs = all_dirs[-1:]
-
-    # compile training positions
-    # data[token] = {'board': board, 'visits': 1, 'points': points}
-    train_data = {}
-    for train_dir in train_dirs:
-        self_play_path = os.path.join(root_dir, train_dir, 'self_play')
-        tournamentfiles = [f for f in os.listdir(self_play_path) if f.startswith('tmnt_') and f.endswith('.pkl')]
-        for file in tournamentfiles:
-            with open(os.path.join(self_play_path, file), 'rb') as pkl:
-                tourn = pickle.load(pkl)
-            for i, pair in tourn.items():
-                for order,game in pair.items():
-                    for color in game:
-                        points = game[color]['points']
-                        for token,board in game[color]['moves']:
-                            if token in train_data:
-                                train_data[token]['visits'] += 1
-                                train_data[token]['points'] += points
-                            else:
-                                train_data[token] = {'board': board, 'visits':1, 'points':points}
-        
-        # augment with checkmates from all previous training rounds, except test round
-        for train_dir in root_dir_subs[:-1]:
-            checkmates_file = os.path.join(root_dir, train_dir, 'checkmates.pkl')
-            with open(checkmates_file, 'rb') as pkl:
-                checkmates = pickle.load(pkl)
-            for token,board,points in checkmates:
-                if token in train_data:
-                    train_data[token]['visits'] += 1
-                    train_data[token]['points'] += points
-                else:
-                    train_data[token] = {'board':board, 'visits':1, 'points':points}
-
-    # compile test positions
-    # data[token] = {'board': board, 'visits': 1, 'points': points}
-    test_data = {}
-    for test_dir in test_dirs:
-        self_play_path = os.path.join(root_dir, test_dir, 'self_play')
-        tournamentfiles = [f for f in os.listdir(self_play_path) if f.startswith('tmnt_') and f.endswith('.pkl')]
-        for file in tournamentfiles:
-            with open(os.path.join(self_play_path, file), 'rb') as pkl:
-                tourn = pickle.load(pkl)
-            for i, pair in tourn.items():
-                for order,game in pair.items():
-                    for color in game:
-                        points = game[color]['points']
-                        for token,board in game[color]['moves']:
-                            if token in test_data:
-                                test_data[token]['visits'] += 1
-                                test_data[token]['points'] += points
-                            else:
-                                test_data[token] = {'board': board, 'visits':1, 'points':points}
-        
-        # augment with checkmates from all previous training rounds.
-        for test_dir in test_dirs:
-            checkmates_file = os.path.join(root_dir, test_dir, 'checkmates.pkl')
-            with open(checkmates_file, 'rb') as pkl:
-                checkmates = pickle.load(pkl)
-            for token,board,points in checkmates:
-                if token in test_data:
-                    test_data[token]['visits'] += 1
-                    test_data[token]['points'] += points
-                else:
-                    test_data[token] = {'board':board, 'visits':1, 'points':points}
+    # Last two self-play directories to be used for training and test set respectively
+    train_dir, test_dir = root_dir_subs[-2:]
+    # Compile training positions
+    train_data = _compile_dataset_(root_dir, train_dir)
+    test_data = _compile_dataset_(root_dir, test_dir)
     
-    return train_data, test_data
+    # augment with checkmates from all previous training rounds, except test round
+    for round_dir in root_dir_subs[:-1]:
+        checkmates_file = os.path.join(root_dir, round_dir, 'checkmates.pkl')
+        with open(checkmates_file, 'rb') as pkl:
+            checkmates = pickle.load(pkl)
+        for token,board,points in checkmates:
+            if token in train_data:
+                train_data[token]['visits'] += 1
+                train_data[token]['points'] += points
+            else:
+                train_data[token] = {'board':board, 'visits':1, 'points':points}
 
+    return train_data, test_data
 
 def train(model, loss_fn, optimizer, train_dataloader, test_dataloader, warmup_passes, max_lr, save_dir, slope_threshold=0, stop_after=10):
 
@@ -167,7 +132,7 @@ def main(pid, mode, root_dir, previous_training_round_dir, current_training_roun
     optimizer = torch.optim.Adam(model.parameters(), lr=0, weight_decay=0)
     loss_fn = TanhLoss()
 
-    train_data, test_data = compile_dataset(root_dir, look_back=10)
+    train_data, test_data = compile_datasets(root_dir)
     train_set = ChessDataset(train_data, device=device)
     test_set = ChessDataset(test_data, device=device)
 

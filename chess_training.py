@@ -6,43 +6,46 @@ from torch.utils.data import DataLoader
 from functools import partial
 from multiprocessing import Pool
 
-def _compile_dataset_(root_dir, split_dir):
-    # Compile training positions
+def _compile_dataset_(root_dir, sub_dirs, discount=0.5):
+    factors = [discount**i for i in range(len(sub_dirs))][::-1]
     data = {}
-    self_play_path = os.path.join(root_dir, split_dir, 'self_play')
-    tournamentfiles = [f for f in os.listdir(self_play_path) if f.startswith('tmnt_') and f.endswith('.pkl')]
-    for file in tournamentfiles:
-        with open(os.path.join(self_play_path, file), 'rb') as pkl:
-            tourn = pickle.load(pkl)
-        for i, pair in tourn.items():
-            for order,game in pair.items():
-                for color in game:
-                    points = game[color]['points']
-                    for token,board in game[color]['moves']:
-                        if token in data:
-                            data[token]['visits'] += 1
-                            data[token]['points'] += points
-                        else:
-                            data[token] = {'board': board, 'visits':1, 'points':points}
+    for sub_dir,factor in zip(sub_dirs, factors):
+        self_play_path = os.path.join(root_dir, sub_dir, 'self_play')
+        tournamentfiles = [f for f in os.listdir(self_play_path) if f.startswith('tmnt_') and f.endswith('.pkl')]
+        for file in tournamentfiles:
+            with open(os.path.join(self_play_path, file), 'rb') as pkl:
+                tourn = pickle.load(pkl)
+            for i, pair in tourn.items():
+                for order,game in pair.items():
+                    for color in game:
+                        points = game[color]['points']
+                        for token,board in game[color]['moves']:
+                            if token in data:
+                                data[token]['visits'] += 1
+                                data[token]['points'] += points * factor
+                            else:
+                                data[token] = {'board': board, 'visits': 1, 'points': points * factor}
+    return data
 
-def compile_datasets(root_dir):
+def compile_datasets(root_dir, look_back=10, discount=0.5):
     # Catalogue training rounds to source dataset from
-    root_dir_subs = sorted([d for d in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir,d))], key=lambda d: int(d.split('_')[-1]))
+    training_round_dirs = sorted([d for d in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir,d))], key=lambda d: int(d.split('_')[-1]))
     # Last two self-play directories to be used for training and test set respectively
-    train_dir, test_dir = root_dir_subs[-2:]
+    train_dirs = training_round_dirs[-look_back:-1]
+    test_dir = training_round_dirs[-1]
     # Compile training positions
-    train_data = _compile_dataset_(root_dir, train_dir)
-    test_data = _compile_dataset_(root_dir, test_dir)
+    train_data = _compile_dataset_(root_dir, train_dirs)
+    test_data = _compile_dataset_(root_dir, [test_dir])
     
     # augment with checkmates from all previous training rounds, except test round
-    for round_dir in root_dir_subs[:-1]:
+    for round_dir in training_round_dirs[:-1]:
         checkmates_file = os.path.join(root_dir, round_dir, 'checkmates.pkl')
         with open(checkmates_file, 'rb') as pkl:
             checkmates = pickle.load(pkl)
         for token,board,points in checkmates:
             if token in train_data:
-                train_data[token]['visits'] += 1
-                train_data[token]['points'] += points
+                train_data[token]['visits'] = 1
+                train_data[token]['points'] = points
             else:
                 train_data[token] = {'board':board, 'visits':1, 'points':points}
 
@@ -132,7 +135,7 @@ def main(pid, mode, root_dir, previous_training_round_dir, current_training_roun
     optimizer = torch.optim.Adam(model.parameters(), lr=0, weight_decay=0)
     loss_fn = TanhLoss()
 
-    train_data, test_data = compile_datasets(root_dir)
+    train_data, test_data = compile_datasets(root_dir, look_back=10)
     train_set = ChessDataset(train_data, device=device)
     test_set = ChessDataset(test_data, device=device)
 

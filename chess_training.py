@@ -21,21 +21,21 @@ def _compile_dataset_(root_dir, sub_dirs, discount=0.5):
                         points = game[color]['points']
                         for token,board in game[color]['moves']:
                             if token in data:
-                                data[token]['visits'] += 1
+                                data[token]['visits'] += factor
                                 data[token]['points'] += points * factor
                             else:
-                                data[token] = {'board': board, 'visits': 1, 'points': points * factor}
+                                data[token] = {'board': board, 'visits': factor, 'points': points * factor}
     return data
 
-def compile_datasets(root_dir, look_back=10, discount=0.5):
+def compile_datasets(root_dir, look_back=20, discount=0.7):
     # Catalogue training rounds to source dataset from
     training_round_dirs = sorted([d for d in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir,d))], key=lambda d: int(d.split('_')[-1]))
     # Last two self-play directories to be used for training and test set respectively
     train_dirs = training_round_dirs[-look_back:-1]
     test_dir = training_round_dirs[-1]
     # Compile training positions
-    train_data = _compile_dataset_(root_dir, train_dirs)
-    test_data = _compile_dataset_(root_dir, [test_dir])
+    train_data = _compile_dataset_(root_dir, train_dirs, discount)
+    test_data = _compile_dataset_(root_dir, [test_dir], discount)
     
     # augment with checkmates from all previous training rounds, except test round
     for round_dir in training_round_dirs[:-1]:
@@ -135,7 +135,7 @@ def main(pid, mode, root_dir, previous_training_round_dir, current_training_roun
     optimizer = torch.optim.Adam(model.parameters(), lr=0, weight_decay=0)
     loss_fn = TanhLoss()
 
-    train_data, test_data = compile_datasets(root_dir, look_back=10)
+    train_data, test_data = compile_datasets(root_dir, look_back=20, discount=0.7)
     train_set = ChessDataset(train_data, device=device)
     test_set = ChessDataset(test_data, device=device)
 
